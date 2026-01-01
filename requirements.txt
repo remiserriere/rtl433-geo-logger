@@ -1,0 +1,4 @@
+flask>=2.3.0
+gpsd-py3>=0.3.0
+folium>=0.14.0
+flask-cors>=4.0.0

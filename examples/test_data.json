@@ -1,0 +1,11 @@
+{"time":"2024-01-15 10:30:00","model":"Acurite-Tower","id":12345,"channel":"A","battery_ok":1,"temperature_C":20.5,"humidity":65,"rssi":-45,"snr":12.3,"noise":-57.3}
+{"time":"2024-01-15 10:30:15","model":"Oregon-THGR122N","id":234,"channel":1,"battery_ok":1,"temperature_C":18.2,"humidity":70,"rssi":-50}
+{"time":"2024-01-15 10:30:30","protocol":"custom_sensor","type":"flex","transmitter_id":"ABC123","payload":"deadbeef","data":[10,20,30,40],"rssi":-52}
+{"time":"2024-01-15 10:30:45","type":"my_device","node_id":42,"value1":100,"value2":200,"snr":15.2}
+{"time":"2024-01-15 10:31:00","model":"LaCrosse-TX","id":55,"temperature_C":22.1,"humidity":58,"rssi":-48}
+{"time":"2024-01-15 10:31:15","protocol":"door_sensor","address":"0xABCD","state":"open","battery":95,"rssi":-40}
+{"time":"2024-01-15 10:31:30","raw":"101010101010","freq":433920000}
+{"time":"2024-01-15 10:31:45","model":"Schrader-TPMS","type":"TPMS","id":"12AB34CD","pressure_kPa":220,"temperature_C":25,"rssi":-55}
+{"time":"2024-01-15 10:32:00","protocol":"my_weather","sensor_id":"WX001","temp":19.8,"humidity":72,"wind_speed":5.2,"wind_dir":180,"rain":0.5,"rssi":-47}
+{"time":"2024-01-15 10:32:15","model":"Generic-Remote","code":"0x123456","house_code":"A","unit":3,"command":"on","rolling_code":"7F8E9D","rssi":-38}
+

@@ -33,6 +33,15 @@ The logger uses flexible field extraction that works with any protocol:
   - Auto-refresh capability
 - **REST API**: Query and filter logged data
 
+## Documentation
+
+- **[README.md](README.md)** - Main documentation (this file)
+- **[PROTOCOLS.md](PROTOCOLS.md)** - Protocol support and custom protocol guide
+- **[API.md](API.md)** - REST API documentation and usage examples
+- **[CONFIGURATION.md](CONFIGURATION.md)** - Configuration examples and production setup
+- **[TESTING.md](TESTING.md)** - Testing guide and troubleshooting
+- **[examples/](examples/)** - Example data and test scripts
+
 ## Requirements
 
 - Python 3.7+

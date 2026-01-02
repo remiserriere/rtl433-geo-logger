@@ -14,14 +14,16 @@ from .database import Database
 class RTL433Logger:
     """Main logger class for RTL433 data with GPS support via rtl_433 native GPSd integration"""
     
-    def __init__(self, db_path: str = "rtl433_data.db"):
+    def __init__(self, db_path: str = "rtl433_data.db", verbose: bool = True):
         """
         Initialize RTL433 logger
         
         Args:
             db_path: Path to SQLite database
+            verbose: Enable verbose output with data recap for each entry
         """
         self.db = Database(db_path)
+        self.verbose = verbose
     
     def process_rtl433_line(self, line: str) -> bool:
         """
@@ -69,31 +71,41 @@ class RTL433Logger:
             # rtl_433 includes lat, lon, alt fields when configured with GPSd
             gps_data = None
             if 'lat' in data and 'lon' in data:
-                gps_data = {
-                    'lat': data.get('lat'),
-                    'lon': data.get('lon'),
-                    'altitude': data.get('alt'),  # Optional altitude field
-                }
+                try:
+                    # Convert to float to handle string values from rtl_433
+                    lat = float(data.get('lat'))
+                    lon = float(data.get('lon'))
+                    alt = float(data.get('alt')) if data.get('alt') is not None else None
+                    
+                    gps_data = {
+                        'lat': lat,
+                        'lon': lon,
+                        'altitude': alt,
+                    }
+                except (ValueError, TypeError) as e:
+                    print(f"Warning: Invalid GPS data format: {e}", file=sys.stderr)
+                    gps_data = None
             
             # Insert into database (handles all protocol types)
             log_id = self.db.insert_log(timestamp, data, gps_data)
             
-            # Print summary - use robust field extraction
-            protocol = data.get('model') or data.get('protocol') or data.get('type') or 'Unknown'
-            device_id = self.db._extract_device_id(data)
-            rssi = data.get('rssi') or data.get('RSSI') or data.get('snr') or 'N/A'
-            
-            summary = f"[{timestamp.strftime('%Y-%m-%d %H:%M:%S')}] {protocol}"
-            if device_id:
-                summary += f" ID:{device_id}"
-            summary += f" RSSI:{rssi}"
-            
-            if gps_data:
-                summary += f" GPS:{gps_data['lat']:.6f},{gps_data['lon']:.6f}"
-                if gps_data.get('altitude'):
-                    summary += f" Alt:{gps_data['altitude']:.1f}m"
-            
-            print(summary)
+            # Print summary if verbose mode is enabled
+            if self.verbose:
+                protocol = data.get('model') or data.get('protocol') or data.get('type') or 'Unknown'
+                device_id = self.db._extract_device_id(data)
+                rssi = data.get('rssi') or data.get('RSSI') or data.get('snr') or 'N/A'
+                
+                summary = f"[{timestamp.strftime('%Y-%m-%d %H:%M:%S')}] {protocol}"
+                if device_id:
+                    summary += f" ID:{device_id}"
+                summary += f" RSSI:{rssi}"
+                
+                if gps_data:
+                    summary += f" GPS:{gps_data['lat']:.6f},{gps_data['lon']:.6f}"
+                    if gps_data.get('altitude') is not None:
+                        summary += f" Alt:{gps_data['altitude']:.1f}m"
+                
+                print(summary)
             
             return True
             
@@ -114,10 +126,11 @@ class RTL433Logger:
         if input_source is None:
             input_source = sys.stdin
         
-        print("RTL433 Geo-Logger started. Reading from input...")
-        print("Expecting rtl_433 JSON output with optional GPS data (lat, lon, alt)")
-        print("Configure rtl_433 with: output_tag gpsd,lat,lon,alt")
-        print("=" * 60)
+        if self.verbose:
+            print("RTL433 Geo-Logger started. Reading from input...")
+            print("Expecting rtl_433 JSON output with optional GPS data (lat, lon, alt)")
+            print("Configure rtl_433 with: output_tag gpsd,lat,lon,alt")
+            print("=" * 60)
         
         try:
             for line in input_source:
@@ -140,10 +153,18 @@ def main():
         default='rtl433_data.db',
         help='Path to SQLite database file (default: rtl433_data.db)'
     )
+    parser.add_argument(
+        '--quiet',
+        action='store_true',
+        help='Disable verbose output (only show errors)'
+    )
     
     args = parser.parse_args()
     
-    logger = RTL433Logger(db_path=args.db)
+    # Verbose is True by default, unless --quiet is specified
+    verbose = not args.quiet
+    
+    logger = RTL433Logger(db_path=args.db, verbose=verbose)
     
     logger.run()
 

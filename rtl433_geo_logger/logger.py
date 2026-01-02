@@ -154,12 +154,6 @@ def main():
         help='Path to SQLite database file (default: rtl433_data.db)'
     )
     parser.add_argument(
-        '--verbose',
-        action='store_true',
-        default=True,
-        help='Display data recap for each entry (default: enabled)'
-    )
-    parser.add_argument(
         '--quiet',
         action='store_true',
         help='Disable verbose output (only show errors)'
@@ -167,8 +161,8 @@ def main():
     
     args = parser.parse_args()
     
-    # Handle quiet flag (overrides verbose)
-    verbose = args.verbose and not args.quiet
+    # Verbose is True by default, unless --quiet is specified
+    verbose = not args.quiet
     
     logger = RTL433Logger(db_path=args.db, verbose=verbose)
     

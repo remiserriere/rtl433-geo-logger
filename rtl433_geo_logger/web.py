@@ -353,11 +353,11 @@ def create_app(db_path: str = "rtl433_data.db"):
                 if (log.device_id) {
                     popupContent += 'Device ID: ' + log.device_id + '<br>';
                 }
-                if (log.rssi !== null) {
+                if (log.rssi != null) {
                     popupContent += 'RSSI: ' + log.rssi + ' dBm<br>';
                 }
                 popupContent += 'Time: ' + log.timestamp + '<br>';
-                if (log.altitude !== null) {
+                if (log.altitude != null) {
                     popupContent += 'Altitude: ' + log.altitude.toFixed(1) + ' m<br>';
                 }
                 
@@ -372,7 +372,7 @@ def create_app(db_path: str = "rtl433_data.db"):
                 
                 // Add to heatmap data (intensity based on RSSI)
                 var intensity = 0.5;
-                if (log.rssi !== null) {
+                if (log.rssi != null) {
                     // Normalize RSSI (-100 to 0) to intensity (0 to 1)
                     intensity = Math.max(0, Math.min(1, (log.rssi + 100) / 100));
                 }
@@ -450,16 +450,16 @@ def create_app(db_path: str = "rtl433_data.db"):
                 var displayedFields = new Set(['timestamp', 'model', 'protocol', 'type']);
                 
                 // Display key fields first
-                if (log.rssi !== null) {
+                if (log.rssi != null) {
                     html += '<div class="data-field"><span class="data-field-name">RSSI:</span><span class="data-field-value">' + log.rssi + ' dBm</span></div>';
                 }
-                if (log.latitude !== null) {
+                if (log.latitude != null) {
                     html += '<div class="data-field"><span class="data-field-name">Latitude:</span><span class="data-field-value">' + log.latitude.toFixed(6) + '</span></div>';
                 }
-                if (log.longitude !== null) {
+                if (log.longitude != null) {
                     html += '<div class="data-field"><span class="data-field-name">Longitude:</span><span class="data-field-value">' + log.longitude.toFixed(6) + '</span></div>';
                 }
-                if (log.altitude !== null) {
+                if (log.altitude != null) {
                     html += '<div class="data-field"><span class="data-field-name">Altitude:</span><span class="data-field-value">' + log.altitude.toFixed(1) + ' m</span></div>';
                 }
                 

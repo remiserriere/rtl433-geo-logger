@@ -44,7 +44,7 @@ def create_app(db_path: str = "rtl433_data.db"):
         .info-panel {
             position: absolute;
             top: 10px;
-            right: 10px;
+            right: 360px;
             z-index: 1000;
             background: white;
             padding: 15px;

@@ -13,7 +13,7 @@ echo "   (Using example data without GPS)"
 echo ""
 
 # Feed test data to logger
-cat examples/test_data.json | python3 -m rtl433_geo_logger.logger --db test_rtl433.db --no-gps
+cat examples/test_data.json | python3 -m rtl433_geo_logger.logger --db test_rtl433.db
 
 echo ""
 echo "2. Database statistics:"

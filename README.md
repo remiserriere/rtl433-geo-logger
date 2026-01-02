@@ -46,7 +46,7 @@ The logger uses flexible field extraction that works with any protocol:
 
 - Python 3.7+
 - RTL433 (for receiving sensor data)
-- GPSD (optional, for GPS support)
+- GPSD (optional, for GPS support via rtl_433 native GPSd integration)
 
 ## Installation
 
@@ -65,22 +65,33 @@ pip install -e .
 
 ## Usage
 
-### Data Collection
+### Data Collection with GPS
 
-The logger reads RTL433 JSON output from stdin and stores it with GPS data:
+RTL433 has **native GPSd support** that includes GPS coordinates directly in its JSON output. This is the recommended approach:
 
 ```bash
-# Basic usage (without GPS)
-rtl_433 -F json | rtl433-logger --no-gps
+# 1. Start GPSD (if using GPS)
+sudo gpsd -N /dev/ttyUSB0
 
-# With GPS support (requires GPSD running)
+# 2. Configure rtl_433 to include GPS data (see examples/rtl_433.conf)
+# Add this line to your rtl_433.conf:
+#   output_tag gpsd,lat,lon,alt
+
+# 3. Run rtl_433 with the logger
+rtl_433 -c examples/rtl_433.conf -F json | rtl433-logger
+
+# Or use command line directly
+rtl_433 -F json -M time:iso:utc -M protocol -M level | rtl433-logger
+```
+
+### Basic Usage (without GPS)
+
+```bash
+# Without GPS - just receive and log sensor data
 rtl_433 -F json | rtl433-logger
 
 # Specify custom database location
 rtl_433 -F json | rtl433-logger --db /path/to/data.db
-
-# Custom GPSD connection
-rtl_433 -F json | rtl433-logger --gps-host 192.168.1.100 --gps-port 2947
 ```
 
 ### Web Interface
@@ -183,19 +194,39 @@ Returns:
 
 ## Example RTL433 Setup
 
-Complete setup example with GPS:
+Complete setup example with GPS using rtl_433 native GPSd support:
 
 ```bash
 # Terminal 1: Start GPSD
-gpsd -N /dev/ttyUSB0
+sudo gpsd -N /dev/ttyUSB0
 
-# Terminal 2: Start data collection
-rtl_433 -F json | rtl433-logger
+# Terminal 2: Start data collection with rtl_433 native GPSd support
+# Option A: Using config file
+rtl_433 -c examples/rtl_433.conf -F json | rtl433-logger --db /data/rtl433.db
+
+# Option B: Direct command line
+rtl_433 -F json -M time:iso:utc -M protocol -M level | rtl433-logger --db /data/rtl433.db
 
 # Terminal 3: Start web interface
-rtl433-web
+rtl433-web --db /data/rtl433.db
 
 # Open browser to http://localhost:5000
+```
+
+### RTL433 Configuration for GPS
+
+To enable GPS data in rtl_433 output, add to your `rtl_433.conf`:
+
+```
+output json
+output_tag gpsd,lat,lon,alt
+```
+
+Or use rtl_433 command line with GPSd running:
+```bash
+# rtl_433 will automatically connect to GPSd on localhost:2947
+# and include lat, lon, alt fields in JSON output
+rtl_433 -F json -M protocol -M level
 ```
 
 ## Device ID Support

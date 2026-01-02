@@ -76,7 +76,8 @@ class Database:
         Args:
             timestamp: Timestamp of the reading
             data: RTL433 data dictionary
-            gps_data: GPS data dictionary (optional)
+            gps_data: GPS data dictionary extracted from rtl_433 JSON (optional)
+                     Expected keys: 'lat', 'lon', 'altitude' (all optional)
             
         Returns:
             ID of inserted row
@@ -90,17 +91,15 @@ class Database:
         # RSSI can be in different cases or missing for some protocols
         rssi = data.get("rssi") or data.get("RSSI") or data.get("snr")
         
-        # Extract GPS data if available
-        gps_timestamp = None
+        # Extract GPS data if available (from rtl_433 native GPSd support)
         latitude = None
         longitude = None
         altitude = None
         
         if gps_data:
-            gps_timestamp = gps_data.get("timestamp")
-            latitude = gps_data.get("lat", gps_data.get("latitude"))
-            longitude = gps_data.get("lon", gps_data.get("longitude"))
-            altitude = gps_data.get("alt", gps_data.get("altitude"))
+            latitude = gps_data.get("lat")
+            longitude = gps_data.get("lon")
+            altitude = gps_data.get("altitude")
         
         # Store complete data as JSON
         data_json = json.dumps(data)
@@ -112,7 +111,7 @@ class Database:
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
         """, (
             timestamp.isoformat(),
-            gps_timestamp.isoformat() if gps_timestamp else None,
+            timestamp.isoformat() if (latitude and longitude) else None,  # Use rtl_433 timestamp for GPS
             latitude,
             longitude,
             altitude,

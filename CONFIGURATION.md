@@ -1,5 +1,54 @@
 # RTL433 Geo-Logger Configuration Examples
 
+## RTL433 Native GPSd Support
+
+RTL433 has **built-in GPSd support** that includes GPS coordinates directly in JSON output. This is the recommended approach for GPS integration.
+
+### Quick Start with GPS
+
+```bash
+# 1. Start GPSD
+sudo gpsd -N /dev/ttyUSB0
+
+# 2. Run rtl_433 (it will auto-detect GPSd on localhost:2947)
+# GPS data (lat, lon, alt) will be included in JSON output
+rtl_433 -F json -M time:iso:utc -M protocol -M level | rtl433-logger
+
+# 3. Or use a configuration file (see examples/rtl_433.conf)
+rtl_433 -c examples/rtl_433.conf -F json | rtl433-logger
+```
+
+### RTL433 Configuration File with GPS
+
+Create `rtl_433.conf`:
+```
+output json
+output_tag gpsd,lat,lon,alt
+frequency 433.92M
+```
+
+Then run:
+```bash
+rtl_433 -c rtl_433.conf | rtl433-logger
+```
+
+### Verify GPS Data in Output
+
+When GPSd is running and rtl_433 is configured properly, you'll see GPS fields in the JSON:
+```json
+{
+  "time": "2026-01-02 16:51:20",
+  "model": "inFactory-TH",
+  "id": 159,
+  "temperature_C": 22.56,
+  "humidity": 29,
+  "rssi": 0.7,
+  "lat": 44.704776200,
+  "lon": 2.661084933,
+  "alt": 695.3
+}
+```
+
 ## Basic RTL433 Commands
 
 ### Capture Everything on 433MHz
@@ -47,28 +96,56 @@ rtl_433 \
 
 ## GPS Configuration
 
-### GPSD with USB GPS
+### Basic GPS Setup
+
+RTL433 includes native GPSd support. Simply ensure GPSd is running:
+
 ```bash
-# Start GPSD
+# Start GPSD with USB GPS device
 sudo gpsd -N /dev/ttyUSB0
 
-# Start logger
+# RTL433 will automatically detect GPSd and include lat, lon, alt in JSON
 rtl_433 -F json | rtl433-logger
 ```
 
-### GPSD with Serial GPS
+### GPSD with Different GPS Devices
+
 ```bash
-# Start GPSD
+# USB GPS device
+sudo gpsd -N /dev/ttyUSB0
+
+# Serial GPS device
 sudo gpsd -N /dev/ttyS0
 
-# Start logger
-rtl433-logger --gps-host localhost --gps-port 2947
+# Bluetooth GPS (after pairing)
+sudo gpsd -N /dev/rfcomm0
+
+# Multiple GPS devices
+sudo gpsd -N /dev/ttyUSB0 /dev/ttyUSB1
 ```
 
-### Remote GPSD
+### Advanced GPSD Configuration
+
 ```bash
-# Connect to GPS on another machine
-rtl_433 -F json | rtl433-logger --gps-host 192.168.1.100 --gps-port 2947
+# Specify GPSD host and port in rtl_433.conf
+# report_meta gpsd localhost:2947
+
+# Or connect to remote GPSD
+# report_meta gpsd 192.168.1.100:2947
+```
+
+### Test GPSD Connection
+
+```bash
+# Check if GPSD is receiving data
+cgps
+
+# Or use gpsmon for detailed view
+gpsmon
+
+# Test with gpspipe
+gpspipe -w | head -n 5
+```
 ```
 
 ## Database Configuration
@@ -243,13 +320,22 @@ sudo usermod -a -G plugdev $USER
 ```
 
 ### GPS Not Working
+
 ```bash
-# Check GPSD
+# Check if GPSD is receiving data
 cgps
 gpsmon
 
-# Restart GPSD
+# Check rtl_433 GPSd connection
+# rtl_433 should show "Getting GPSd JSON data from localhost port 2947"
+rtl_433 -F json
+
+# Restart GPSD if needed
 sudo systemctl restart gpsd
+
+# Verify GPS data in rtl_433 output
+# Look for lat, lon, alt fields in JSON output
+rtl_433 -F json | grep -E '"(lat|lon|alt)"'
 ```
 
 ### Database Locked
@@ -264,13 +350,14 @@ sqlite3 rtl433.db "PRAGMA journal_mode=WAL;"
 ## Production Recommendations
 
 1. **Use systemd service** for automatic restart
-2. **Enable GPS** for mobile/fixed location logging
+2. **Enable GPS via rtl_433 native GPSd support** for mobile/fixed location logging
 3. **Set up regular backups** of database
 4. **Monitor disk space** - database can grow quickly
 5. **Use WAL mode** for better concurrent access
 6. **Run web service separately** from logger
 7. **Set appropriate permissions** on database file
 8. **Consider log rotation** for long-term operation
+9. **Use rtl_433.conf file** for consistent configuration
 
 ## Example Complete Setup
 
@@ -280,11 +367,11 @@ git clone https://github.com/remiserriere/rtl433-geo-logger.git
 cd rtl433-geo-logger
 pip install -e .
 
-# 2. Start GPS
+# 2. Start GPSD (for GPS support)
 sudo gpsd -N /dev/ttyUSB0
 
-# 3. Start logger (in screen/tmux)
-rtl_433 -F json | rtl433-logger --db /data/rtl433.db
+# 3. Start logger with rtl_433 native GPSd support
+rtl_433 -c examples/rtl_433.conf -F json | rtl433-logger --db /data/rtl433.db
 
 # 4. Start web service (separate terminal)
 rtl433-web --db /data/rtl433.db --host 0.0.0.0 --port 5000

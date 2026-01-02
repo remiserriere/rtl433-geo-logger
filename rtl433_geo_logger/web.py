@@ -36,9 +36,11 @@ def create_app(db_path: str = "rtl433_data.db"):
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <link rel="stylesheet" href="https://unpkg.com/leaflet.heat@0.2.0/dist/leaflet-heat.css" />
+    <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css" />
+    <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css" />
     <style>
         body { margin: 0; padding: 0; font-family: Arial, sans-serif; }
-        #map { position: absolute; top: 0; bottom: 0; width: 100%; }
+        #map { position: absolute; top: 0; bottom: 0; left: 0; right: 350px; }
         .info-panel {
             position: absolute;
             top: 10px;
@@ -91,6 +93,78 @@ def create_app(db_path: str = "rtl433_data.db"):
         }
         button:hover { background: #f0f0f0; }
         button.active { background: #007bff; color: white; }
+        
+        /* Data panel styles */
+        .data-panel {
+            position: absolute;
+            top: 0;
+            right: 0;
+            bottom: 0;
+            width: 350px;
+            background: white;
+            box-shadow: -2px 0 15px rgba(0,0,0,0.2);
+            overflow-y: auto;
+            z-index: 900;
+            padding: 15px;
+        }
+        .data-panel h3 {
+            margin-top: 0;
+            border-bottom: 2px solid #007bff;
+            padding-bottom: 10px;
+        }
+        .data-item {
+            margin: 10px 0;
+            padding: 10px;
+            background: #f8f9fa;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+        .data-item:hover {
+            background: #e9ecef;
+        }
+        .data-item.selected {
+            background: #cfe2ff;
+            border-left: 3px solid #007bff;
+        }
+        .data-item-header {
+            font-weight: bold;
+            color: #007bff;
+            margin-bottom: 5px;
+        }
+        .data-item-time {
+            font-size: 12px;
+            color: #6c757d;
+            margin-bottom: 5px;
+        }
+        .data-item-content {
+            font-size: 13px;
+            display: none;
+        }
+        .data-item.expanded .data-item-content {
+            display: block;
+            margin-top: 8px;
+            padding-top: 8px;
+            border-top: 1px solid #dee2e6;
+        }
+        .data-field {
+            margin: 3px 0;
+            display: flex;
+            justify-content: space-between;
+        }
+        .data-field-name {
+            font-weight: 500;
+            color: #495057;
+        }
+        .data-field-value {
+            color: #212529;
+            font-family: 'Courier New', monospace;
+        }
+        .no-data-message {
+            text-align: center;
+            color: #6c757d;
+            padding: 20px;
+        }
     </style>
 </head>
 <body>
@@ -123,8 +197,16 @@ def create_app(db_path: str = "rtl433_data.db"):
     
     <div id="map"></div>
     
+    <div class="data-panel">
+        <h3>Data Details</h3>
+        <div id="dataList">
+            <div class="no-data-message">Loading data...</div>
+        </div>
+    </div>
+    
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script src="https://unpkg.com/leaflet.heat@0.2.0/dist/leaflet-heat.js"></script>
+    <script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
     <script>
         // Initialize map
         var map = L.map('map').setView([48.8566, 2.3522], 13);  // Default: Paris
@@ -133,17 +215,20 @@ def create_app(db_path: str = "rtl433_data.db"):
             attribution: '© OpenStreetMap contributors'
         }).addTo(map);
         
-        var markers = [];
+        var markerClusterGroup = null;
         var heatmapLayer = null;
         var showHeatmap = false;
         var autoRefreshInterval = null;
         var allLogs = [];  // Store all logs for filtering
         var availableProtocols = new Set();
-        var availableDevices = new Set();
+        var protocolDeviceMap = {};  // Map of protocol -> Set of devices
+        var selectedLogId = null;
         
         function clearMarkers() {
-            markers.forEach(marker => map.removeLayer(marker));
-            markers = [];
+            if (markerClusterGroup) {
+                map.removeLayer(markerClusterGroup);
+                markerClusterGroup = null;
+            }
             if (heatmapLayer) {
                 map.removeLayer(heatmapLayer);
                 heatmapLayer = null;
@@ -165,11 +250,33 @@ def create_app(db_path: str = "rtl433_data.db"):
                 protocolFilter.appendChild(option);
             });
             
-            // Update device filter
+            // Update device filter based on selected protocol
+            updateDeviceFilter();
+        }
+        
+        function updateDeviceFilter() {
+            var protocolFilter = document.getElementById('protocolFilter');
             var deviceFilter = document.getElementById('deviceFilter');
             var currentDevice = deviceFilter.value;
+            var selectedProtocol = protocolFilter.value;
+            
             deviceFilter.innerHTML = '<option value="">All Devices</option>';
-            Array.from(availableDevices).sort().forEach(device => {
+            
+            // Get devices for the selected protocol or all devices if no protocol selected
+            var devicesToShow = new Set();
+            if (selectedProtocol) {
+                // Only show devices from the selected protocol
+                if (protocolDeviceMap[selectedProtocol]) {
+                    devicesToShow = protocolDeviceMap[selectedProtocol];
+                }
+            } else {
+                // Show all devices from all protocols
+                Object.values(protocolDeviceMap).forEach(deviceSet => {
+                    deviceSet.forEach(device => devicesToShow.add(device));
+                });
+            }
+            
+            Array.from(devicesToShow).sort().forEach(device => {
                 var option = document.createElement('option');
                 option.value = device;
                 option.textContent = device;
@@ -196,6 +303,8 @@ def create_app(db_path: str = "rtl433_data.db"):
         }
         
         function applyFilters() {
+            // Update device filter dropdown when protocol changes
+            updateDeviceFilter();
             displayLogs(getFilteredLogs());
         }
         
@@ -213,8 +322,17 @@ def create_app(db_path: str = "rtl433_data.db"):
                     'No data with GPS location found' : 
                     'No data matches the current filters';
                 document.getElementById('stats').innerHTML = '<div>' + message + '</div>';
+                updateDataPanel([]);
                 return;
             }
+            
+            // Create marker cluster group
+            markerClusterGroup = L.markerClusterGroup({
+                chunkedLoading: true,
+                spiderfyOnMaxZoom: true,
+                showCoverageOnHover: false,
+                zoomToBoundsOnClick: true
+            });
             
             // Prepare heatmap data
             var heatData = [];
@@ -226,6 +344,9 @@ def create_app(db_path: str = "rtl433_data.db"):
                 
                 // Create marker
                 var marker = L.marker([lat, lon]);
+                
+                // Store log data in marker for later use
+                marker.logData = log;
                 
                 // Create popup content
                 var popupContent = '<b>' + (log.protocol || 'Unknown') + '</b><br>';
@@ -242,10 +363,12 @@ def create_app(db_path: str = "rtl433_data.db"):
                 
                 marker.bindPopup(popupContent);
                 
-                if (!showHeatmap) {
-                    marker.addTo(map);
-                }
-                markers.push(marker);
+                // Add click event to highlight in data panel
+                marker.on('click', function() {
+                    highlightDataItem(log.id);
+                });
+                
+                markerClusterGroup.addLayer(marker);
                 
                 // Add to heatmap data (intensity based on RSSI)
                 var intensity = 0.5;
@@ -255,6 +378,11 @@ def create_app(db_path: str = "rtl433_data.db"):
                 }
                 heatData.push([lat, lon, intensity]);
             });
+            
+            // Add marker cluster to map if not showing heatmap
+            if (!showHeatmap) {
+                map.addLayer(markerClusterGroup);
+            }
             
             // Create heatmap layer
             if (heatData.length > 0) {
@@ -277,13 +405,109 @@ def create_app(db_path: str = "rtl433_data.db"):
             }
             
             // Auto-zoom to show all markers
-            if (markers.length > 0) {
-                var group = new L.featureGroup(markers);
-                map.fitBounds(group.getBounds().pad(0.1));
+            if (markerClusterGroup && markerClusterGroup.getLayers().length > 0) {
+                map.fitBounds(markerClusterGroup.getBounds().pad(0.1));
             }
+            
+            // Update data panel with filtered logs
+            updateDataPanel(logs);
             
             // Update stats display
             updateStats(logs.length);
+        }
+        
+        function updateDataPanel(logs) {
+            var dataList = document.getElementById('dataList');
+            
+            if (logs.length === 0) {
+                dataList.innerHTML = '<div class="no-data-message">No data to display</div>';
+                return;
+            }
+            
+            // Sort logs by timestamp (most recent first)
+            var sortedLogs = logs.slice().sort((a, b) => {
+                return new Date(b.timestamp) - new Date(a.timestamp);
+            });
+            
+            var html = '';
+            sortedLogs.forEach(log => {
+                var dataObj = log.data || {};
+                var itemClass = 'data-item';
+                if (selectedLogId === log.id) {
+                    itemClass += ' expanded';
+                }
+                
+                html += '<div class="' + itemClass + '" id="data-item-' + log.id + '" onclick="toggleDataItem(' + log.id + ')">';
+                html += '<div class="data-item-header">' + (log.protocol || 'Unknown');
+                if (log.device_id) {
+                    html += ' - ID: ' + log.device_id;
+                }
+                html += '</div>';
+                html += '<div class="data-item-time">' + log.timestamp + '</div>';
+                html += '<div class="data-item-content">';
+                
+                // Display all data fields
+                var displayedFields = new Set(['timestamp', 'model', 'protocol', 'type']);
+                
+                // Display key fields first
+                if (log.rssi !== null) {
+                    html += '<div class="data-field"><span class="data-field-name">RSSI:</span><span class="data-field-value">' + log.rssi + ' dBm</span></div>';
+                }
+                if (log.latitude !== null) {
+                    html += '<div class="data-field"><span class="data-field-name">Latitude:</span><span class="data-field-value">' + log.latitude.toFixed(6) + '</span></div>';
+                }
+                if (log.longitude !== null) {
+                    html += '<div class="data-field"><span class="data-field-name">Longitude:</span><span class="data-field-value">' + log.longitude.toFixed(6) + '</span></div>';
+                }
+                if (log.altitude !== null) {
+                    html += '<div class="data-field"><span class="data-field-name">Altitude:</span><span class="data-field-value">' + log.altitude.toFixed(1) + ' m</span></div>';
+                }
+                
+                // Display all other fields from JSON data
+                Object.keys(dataObj).sort().forEach(key => {
+                    if (!displayedFields.has(key) && key !== 'lat' && key !== 'lon' && key !== 'alt') {
+                        var value = dataObj[key];
+                        if (typeof value === 'object') {
+                            value = JSON.stringify(value);
+                        }
+                        html += '<div class="data-field"><span class="data-field-name">' + key + ':</span><span class="data-field-value">' + value + '</span></div>';
+                    }
+                });
+                
+                html += '</div></div>';
+            });
+            
+            dataList.innerHTML = html;
+        }
+        
+        function toggleDataItem(logId) {
+            var item = document.getElementById('data-item-' + logId);
+            if (item.classList.contains('expanded')) {
+                item.classList.remove('expanded');
+                selectedLogId = null;
+            } else {
+                // Remove expanded class from all items
+                document.querySelectorAll('.data-item').forEach(el => {
+                    el.classList.remove('expanded');
+                });
+                item.classList.add('expanded');
+                selectedLogId = logId;
+            }
+        }
+        
+        function highlightDataItem(logId) {
+            selectedLogId = logId;
+            var item = document.getElementById('data-item-' + logId);
+            if (item) {
+                // Remove expanded from all
+                document.querySelectorAll('.data-item').forEach(el => {
+                    el.classList.remove('expanded');
+                });
+                // Expand this one
+                item.classList.add('expanded');
+                // Scroll to item
+                item.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+            }
         }
         
         function loadData() {
@@ -294,14 +518,19 @@ def create_app(db_path: str = "rtl433_data.db"):
                     
                     // Collect available protocols and devices
                     availableProtocols.clear();
-                    availableDevices.clear();
+                    protocolDeviceMap = {};
                     
                     allLogs.forEach(log => {
                         if (log.protocol) {
                             availableProtocols.add(log.protocol);
-                        }
-                        if (log.device_id) {
-                            availableDevices.add(log.device_id);
+                            
+                            // Build protocol -> device mapping
+                            if (!protocolDeviceMap[log.protocol]) {
+                                protocolDeviceMap[log.protocol] = new Set();
+                            }
+                            if (log.device_id) {
+                                protocolDeviceMap[log.protocol].add(log.device_id);
+                            }
                         }
                     });
                     
@@ -346,18 +575,22 @@ def create_app(db_path: str = "rtl433_data.db"):
             showHeatmap = !showHeatmap;
             
             if (showHeatmap) {
-                // Hide markers, show heatmap
-                markers.forEach(marker => map.removeLayer(marker));
+                // Hide marker clusters, show heatmap
+                if (markerClusterGroup) {
+                    map.removeLayer(markerClusterGroup);
+                }
                 if (heatmapLayer) {
                     heatmapLayer.addTo(map);
                 }
                 document.getElementById('heatmapBtn').classList.add('active');
             } else {
-                // Show markers, hide heatmap
+                // Show marker clusters, hide heatmap
                 if (heatmapLayer) {
                     map.removeLayer(heatmapLayer);
                 }
-                markers.forEach(marker => marker.addTo(map));
+                if (markerClusterGroup) {
+                    map.addLayer(markerClusterGroup);
+                }
                 document.getElementById('heatmapBtn').classList.remove('active');
             }
         }
